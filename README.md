@@ -1,0 +1,141 @@
+# Aetheris: Autonomous Crypto Arbitrage & Sentiment Engine
+
+**Version:** 1.0.0 (Prototype)  
+**Submission Date:** 2025/12/01  
+**Category:** DeFi / AI / Fintech  
+
+## 1. Executive Summary
+**Aetheris** is a consolidated AI trading ecosystem designed to solve the fragmentation in cryptocurrency trading. Instead of treating arbitrage, sentiment analysis, and risk management as separate disciplines, Aetheris fuses them into a single decision-making pipeline.
+
+The system utilizes serverless architecture to scan exchanges for price discrepancies (arbitrage) while simultaneously running client-side Natural Language Processing (NLP) models to contextualize these opportunities against real-time market sentiment. This dual-validation approach ensures that trades are not just mathematically profitable, but also sentimentally aligned with market trends to reduce risk.
+
+-----------
+
+API DOCUMENTATION: https://www.weex.com/api-doc/ai/QuickStart/IntegrationPreparation
+
+-----------
+
+## 2. System Architecture & Workflow
+
+The platform operates on a **Event-Driven Serverless Architecture** powered by the Firebase Suite, with distributed AI processing handled directly within the client application via React and Transformers.js.
+
+### The Decision Loop
+1.  **Ingestion (Serverless):** Cloud Functions continuously poll simulated exchange data (e.g., Binance vs. Uniswap) and social signal feeds.
+2.  **Detection (Logic Layer):** The system calculates spread percentages. If a spread >1% is detected, a `TradeOpportunity` event is generated.
+3.  **Validation (AI Layer):**
+    *   **Sentiment Check:** The NLP engine analyzes recent headlines associated with the asset.
+    *   **Risk Scoring:** The Risk Engine calculates a volatility score.
+4.  **Execution (Transaction Layer):** If `Profit > Fees` AND `Sentiment == Positive`, the trade is marked for execution.
+
+---
+
+## 3. Technical Implementation
+
+### A. Frontend & AI Core (React + Transformers.js)
+The frontend is not just a display; it is a computational node.
+*   **Framework:** React (Vite)
+*   **State Management:** React Context API for real-time data streams.
+*   **AI Engine:** We utilize `@xenova/transformers` to run quantized BERT models directly in the browser. This allows for zero-latency sentiment analysis of news feeds without requiring external heavy GPU servers.
+    *   *Input:* Live news headlines/Tweet streams.
+    *   *Output:* Sentiment Polarity (-1.0 to +1.0) and Confidence Score.
+
+### B. The Backend Swarm (Firebase Cloud Functions)
+The backend acts as the "Market Scanner" running in a serverless environment.
+*   **Arbitrage Bot:** A scheduled function (`pubsub.schedule`) runs every 60 seconds. It fetches prices for target pairs (e.g., ETH/USDT) across two distinct liquidity sources.
+*   **Spread Calculator:** Computes the delta between sources. If the delta covers gas fees + slippage, it writes to the `opportunities` collection in Firestore.
+*   **Compliance Monitor:** A middleware function that cross-references potential trades against a "Blocked Addresses" list (simulating the Regulatory Compliance requirement).
+
+### C. Real-Time Data Layer (Firestore)
+Firestore acts as the central message bus, synchronizing state between the serverless bots and the frontend dashboard.
+*   **Live Updates:** The frontend utilizes `onSnapshot` listeners to render price changes and arbitrage alerts instantly, eliminating the need for manual refreshing.
+
+---
+
+## 4. Project Structure
+
+The repository is organized into a monorepo structure separating the UI/AI logic from the serverless backend.
+
+```text
+aetheris-protocol/
+├── src/                          # Frontend & Local AI
+│   ├── components/
+│   │   ├── Dashboard/            # Main trading view
+│   │   ├── ArbitrageCard.jsx     # Visualizer for price spreads
+│   │   └── SentimentGauge.jsx    # Visualizer for AI analysis
+│   ├── hooks/
+│   │   ├── useMarketData.js      # Firestore real-time listeners
+│   │   └── useTextModel.js       # Loads the HuggingFace model
+│   ├── lib/
+│   │   ├── firebase.js           # DB initialization
+│   │   └── strategies.js         # Client-side trade logic
+│   └── App.jsx
+├── functions/                    # Serverless Backend
+│   ├── index.js                  # Entry point for Cloud Functions
+│   ├── scanners/
+│   │   ├── priceScanner.js       # Fetches exchange prices
+│   │   └── walletSecurity.js     # Mock risk assessment logic
+│   └── utils/
+│       └── math.js               # Spread & fee calculations
+├── firebase.json                 # Emulator & Deploy config
+└── README.md
+```
+
+---
+
+## 5. Data Models (Schema)
+
+The database is structured to support high-frequency reads and immutable audit trails for trades.
+
+### Collection: `market_ticks`
+Stores the heartbeat of the market.
+```json
+{
+  "asset": "ETH",
+  "exchange_a_price": 3400.50,
+  "exchange_b_price": 3420.00,
+  "timestamp": "2025-12-01T12:00:00Z"
+}
+```
+
+### Collection: `opportunities` (The "Alerts")
+Generated by the serverless scanner when arbitrage is found.
+```json
+{
+  "status": "DETECTED", // DETECTED -> ANALYZING -> EXECUTED
+  "spread_pct": 1.25,
+  "projected_profit": 45.00,
+  "risk_level": "LOW",
+  "ai_validation": {
+    "sentiment_score": 0.88,
+    "approval": true
+  }
+}
+```
+
+### Collection: `audit_logs`
+An immutable record of automated actions (Risk & Compliance).
+```json
+{
+  "action": "TRADE_BLOCKED",
+  "reason": "Sentiment Drop Detected",
+  "ai_confidence": 0.92,
+  "timestamp": "2025-12-01T12:05:00Z"
+}
+```
+
+---
+
+## 6. Feature Breakdown (Idea Integration)
+
+This prototype successfully integrates the following proposed modules from the initial conceptual list:
+
+1.  **Arbitrage Opportunity Detector:** Implemented via Node.js Cloud Functions comparing exchange spreads.
+2.  **Sentiment Analysis Trading Bot:** Implemented via in-browser Transformers analyzing text inputs to gatekeep trades.
+3.  **Real-Time Market Sentiment Dashboard:** Visualized in the React frontend using `recharts` mapped to AI scores.
+4.  **AI-Enhanced Security / Risk Management:** Implemented as a pre-trade check that prevents execution if volatility or negative sentiment exceeds a threshold.
+5.  **Automated Regulatory Compliance:** Simulated via a "Allow/Block" list in the serverless function before trade execution.
+
+---
+
+## 7. Conclusion
+Aetheris demonstrates that complex trading strategies can be democratized using modern serverless stacks and accessible AI. By moving the heavy lifting of price scanning to the cloud and the nuance of sentiment analysis to the client, we achieve a low-latency, high-intelligence trading terminal.

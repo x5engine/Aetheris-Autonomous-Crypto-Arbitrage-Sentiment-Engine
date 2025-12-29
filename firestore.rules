@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Market ticks - read only for authenticated users
+    match /market_ticks/{tickId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // Opportunities - read/write for authenticated users
+    match /opportunities/{opportunityId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // Audit logs - read only, write by Cloud Functions only
+    match /audit_logs/{logId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Cloud Functions can write
+    }
+  }
+}
+
