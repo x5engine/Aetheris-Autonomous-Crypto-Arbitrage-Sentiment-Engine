@@ -28,28 +28,40 @@ cd ..
 firebase login
 ```
 
-2. Initialize Firebase in your project:
-```bash
-firebase init
-```
+2. Firebase project is already configured:
+   - **Project ID**: `hackathon-project-245ba`
+   - **Project is set as current** in Firebase CLI
+   
+   If you need to reinitialize:
+   ```bash
+   firebase use hackathon-project-245ba
+   ```
 
-Select:
-- Firestore
-- Functions
-- Use existing project (select your Firebase project)
+   Or initialize from scratch:
+   ```bash
+   firebase init
+   ```
+   
+   Select:
+   - Firestore
+   - Functions
+   - Use existing project: `hackathon-project-245ba`
 
 ### 3. Environment Variables
 
 #### Frontend (.env file in root)
+The `.env` file has been pre-configured with your Firebase project credentials:
 ```env
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_API_KEY=AIzaSyA5wjZM78tGyAVDlv2Yy95HKl0kjFvjkLk
+VITE_FIREBASE_AUTH_DOMAIN=hackathon-project-245ba.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=hackathon-project-245ba
+VITE_FIREBASE_STORAGE_BUCKET=hackathon-project-245ba.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=13696281360
+VITE_FIREBASE_APP_ID=1:13696281360:web:07952d00bbbf12d8c0d395
 VITE_USE_EMULATOR=false
 ```
+
+**Note**: The `.env` file is already created with your project configuration. If you need to modify it, edit `.env` directly.
 
 #### Backend (Firebase Functions environment variables)
 ```bash

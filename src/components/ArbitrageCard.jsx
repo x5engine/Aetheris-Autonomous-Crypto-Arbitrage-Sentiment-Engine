@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { formatWeeXSymbol, formatPrice, formatPercentage, getSpreadColor } from '../lib/weexApi';
 import { shouldExecuteTrade } from '../lib/strategies';
-import { executeTrade } from '../lib/tradeExecution';
+import { requestTradeExecution } from '../lib/tradeExecution';
 
 export default function ArbitrageCard({ opportunity }) {
   if (!opportunity) return null;
@@ -18,8 +18,8 @@ export default function ArbitrageCard({ opportunity }) {
     setExecutionResult(null);
 
     try {
-      const result = await executeTrade(opportunity.id, 10); // Default 10 USDT
-      setExecutionResult({ success: true, message: result.message || 'Trade executed successfully' });
+      const result = await requestTradeExecution(opportunity.id);
+      setExecutionResult({ success: true, message: result.message || 'Trade execution requested' });
     } catch (error) {
       setExecutionResult({ success: false, message: error.message || 'Failed to execute trade' });
     } finally {

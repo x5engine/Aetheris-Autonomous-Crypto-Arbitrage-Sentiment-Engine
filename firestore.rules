@@ -1,23 +1,71 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Market ticks - read only for authenticated users
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Live feed collection (written by VPS bot via Admin SDK)
+    // Read: Public (for real-time market data display)
+    // Write: Only VPS bot (using Admin SDK, bypasses rules)
+    match /live_feed/{docId} {
+      // Allow public read for market data
+      allow read: if true;
+      
+      // Only VPS bot can write (uses Admin SDK)
+      // Frontend cannot write
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Alerts collection (written by VPS bot, updated by frontend for AI validation)
+    // Read: Public
+    // Write: Frontend can update (for AI validation), VPS bot creates (via Admin SDK)
+    match /alerts/{alertId} {
+      // Allow public read
+      allow read: if true;
+      
+      // Allow authenticated users to update alerts (for AI sentiment analysis)
+      allow update: if isAuthenticated() &&
+                      // Only allow updating specific fields
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'status',
+                        'ai_validation',
+                        'analyzed_at'
+                      ])) &&
+                      // Valid status transitions
+                      (request.resource.data.status == resource.data.status ||
+                       request.resource.data.status in ['ANALYZING', 'APPROVED', 'REJECTED', 'EXECUTED']);
+      
+      // Frontend cannot create or delete (only VPS bot creates)
+      allow create: if false;
+      allow delete: if false;
+    }
+    
+    // Legacy collections (for backward compatibility, can be removed later)
     match /market_ticks/{tickId} {
-      allow read: if request.auth != null;
-      allow write: if false; // Only Cloud Functions can write
+      allow read: if true;
+      allow write: if false;
     }
     
-    // Opportunities - read/write for authenticated users
     match /opportunities/{opportunityId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow update: if isAuthenticated();
+      allow create: if false;
+      allow delete: if false;
     }
     
-    // Audit logs - read only, write by Cloud Functions only
     match /audit_logs/{logId} {
-      allow read: if request.auth != null;
-      allow write: if false; // Only Cloud Functions can write
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+    
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
-

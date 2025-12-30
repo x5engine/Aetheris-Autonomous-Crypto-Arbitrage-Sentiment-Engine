@@ -1,40 +1,50 @@
-import { httpsCallable } from 'firebase/functions';
-import { functions } from './firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
 /**
- * Execute a trade via WEEX API through Cloud Function
- * @param {string} opportunityId - Opportunity document ID
- * @param {number} tradeSize - Trade size in USDT (default: 10)
- * @returns {Promise<object>} Trade execution result
+ * Mark alert for execution (VPS bot will handle actual trade execution)
+ * @param {string} alertId - Alert document ID
+ * @returns {Promise<object>} Update result
  */
-export async function executeTrade(opportunityId, tradeSize = 10) {
+export async function requestTradeExecution(alertId) {
   try {
-    const executeTradeFunction = httpsCallable(functions, 'executeTrade');
-
-    const result = await executeTradeFunction({
-      opportunityId,
-      tradeSize
+    // Update alert status to request execution
+    // The VPS bot will monitor this and execute the trade
+    await updateDoc(doc(db, 'alerts', alertId), {
+      status: 'EXECUTING',
+      execution_requested_at: new Date().toISOString()
     });
 
-    return result.data;
+    return {
+      success: true,
+      message: 'Trade execution requested. VPS bot will process it.'
+    };
   } catch (error) {
-    console.error('Error executing trade:', error);
+    console.error('Error requesting trade execution:', error);
     throw error;
   }
 }
 
 /**
- * Get account balance from WEEX
- * @returns {Promise<object>} Account balance data
+ * Update alert with AI validation results
+ * @param {string} alertId - Alert document ID
+ * @param {object} aiValidation - AI validation data
+ * @returns {Promise<object>} Update result
  */
-export async function getAccountBalance() {
+export async function updateAIValidation(alertId, aiValidation) {
   try {
-    const getBalanceFunction = httpsCallable(functions, 'getAccountBalance');
+    await updateDoc(doc(db, 'alerts', alertId), {
+      ai_validation: aiValidation,
+      analyzed_at: new Date().toISOString(),
+      status: aiValidation.approval ? 'APPROVED' : 'REJECTED'
+    });
 
-    const result = await getBalanceFunction();
-    return result.data;
+    return {
+      success: true,
+      message: 'AI validation updated'
+    };
   } catch (error) {
-    console.error('Error fetching account balance:', error);
+    console.error('Error updating AI validation:', error);
     throw error;
   }
 }

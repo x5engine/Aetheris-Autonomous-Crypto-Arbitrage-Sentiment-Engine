@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Production rules - strict security
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function hasValidEmail() {
+      return request.auth.token.email != null &&
+             request.auth.token.email.matches('.*@.*\\..*');
+    }
+    
+    function isValidMarketTick(data) {
+      return data.keys().hasAll(['asset', 'exchange_a_price', 'exchange_b_price', 'timestamp', 'symbol']) &&
+             data.asset is string &&
+             data.exchange_a_price is number &&
+             data.exchange_b_price is number &&
+             data.timestamp is string &&
+             data.symbol is string &&
+             data.exchange_a_price > 0 &&
+             data.exchange_b_price > 0;
+    }
+    
+    function isValidOpportunity(data) {
+      return data.keys().hasAll(['status', 'symbol', 'spread_pct', 'projected_profit', 'risk_level', 'timestamp']) &&
+             data.status is string &&
+             data.symbol is string &&
+             data.spread_pct is number &&
+             data.projected_profit is number &&
+             data.risk_level is string &&
+             data.timestamp is string &&
+             data.spread_pct >= 0 &&
+             data.projected_profit >= 0;
+    }
+    
+    function isValidStatus(status) {
+      return status in ['DETECTED', 'ANALYZING', 'EXECUTED', 'REJECTED', 'BLOCKED'];
+    }
+    
+    function isValidRiskLevel(risk) {
+      return risk in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+    }
+    
+    // Market ticks - read only, authenticated users
+    match /market_ticks/{tickId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only Cloud Functions
+    }
+    
+    // Opportunities - authenticated read/write with validation
+    match /opportunities/{opportunityId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated() && 
+                      hasValidEmail() &&
+                      isValidOpportunity(request.resource.data) &&
+                      isValidStatus(request.resource.data.status) &&
+                      isValidRiskLevel(request.resource.data.risk_level);
+      
+      allow update: if isAuthenticated() &&
+                      hasValidEmail() &&
+                      // Only allow updating specific fields
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'status', 
+                        'ai_validation', 
+                        'updated_at', 
+                        'executed_at', 
+                        'order_id', 
+                        'trade_size', 
+                        'trade_side',
+                        'ai_log_uploaded',
+                        'ai_log_uploaded_at',
+                        'compliance_check'
+                      ])) &&
+                      isValidStatus(request.resource.data.status);
+      
+      allow delete: if false; // Never allow deletion
+    }
+    
+    // Audit logs - read only, authenticated users
+    match /audit_logs/{logId} {
+      allow read: if isAuthenticated() && hasValidEmail();
+      allow write: if false; // Only Cloud Functions
+    }
+    
+    // Deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

@@ -8,3 +8,29 @@ dist/
 .vscode/
 .idea/
 
+# Client
+client/dist/
+client/node_modules/
+client/.env
+client/.env.local
+
+# Engine (VPS Bot)
+engine/node_modules/
+engine/.env
+engine/service-account.json
+engine/*.log
+
+# Firebase Service Account (NEVER COMMIT)
+hackathon-project-245ba-firebase-adminsdk-*.json
+*-firebase-adminsdk-*.json
+firebase-adminsdk-*.json
+
+# VPS Credentials - NEVER COMMIT
+.env
+.env.*
+*.env
+!.env.example
+
+# Legacy
+functions/
+src/

@@ -1,21 +1,21 @@
 {
   "indexes": [
     {
-      "collectionGroup": "market_ticks",
+      "collectionGroup": "live_feed",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "timestamp",
+          "fieldPath": "last_updated",
           "order": "DESCENDING"
         },
         {
-          "fieldPath": "asset",
+          "fieldPath": "exchange",
           "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "opportunities",
+      "collectionGroup": "alerts",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -23,7 +23,21 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "timestamp",
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "alerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
           "order": "DESCENDING"
         }
       ]

@@ -1,141 +1,214 @@
-# Aetheris: Autonomous Crypto Arbitrage & Sentiment Engine
+# Aetheris: Hybrid AI Trading & Sentiment Engine
 
-**Version:** 1.0.0 (Prototype)  
+**Version:** 1.1.0 (Hackathon Edition)  
+**Architecture:** Hybrid (Client-Side AI + VPS Execution Node)  
 **Submission Date:** 2025/12/01  
 **Category:** DeFi / AI / Fintech  
 
 ## 1. Executive Summary
-**Aetheris** is a consolidated AI trading ecosystem designed to solve the fragmentation in cryptocurrency trading. Instead of treating arbitrage, sentiment analysis, and risk management as separate disciplines, Aetheris fuses them into a single decision-making pipeline.
 
-The system utilizes serverless architecture to scan exchanges for price discrepancies (arbitrage) while simultaneously running client-side Natural Language Processing (NLP) models to contextualize these opportunities against real-time market sentiment. This dual-validation approach ensures that trades are not just mathematically profitable, but also sentimentally aligned with market trends to reduce risk.
+Aetheris is a real-time arbitrage and sentiment analysis platform. It overcomes strict API IP-whitelisting constraints by utilizing a **Hybrid Architecture**:
 
------------
-
-API DOCUMENTATION: https://www.weex.com/api-doc/ai/QuickStart/IntegrationPreparation
-
------------
-
-## 2. System Architecture & Workflow
-
-The platform operates on a **Event-Driven Serverless Architecture** powered by the Firebase Suite, with distributed AI processing handled directly within the client application via React and Transformers.js.
-
-### The Decision Loop
-1.  **Ingestion (Serverless):** Cloud Functions continuously poll simulated exchange data (e.g., Binance vs. Uniswap) and social signal feeds.
-2.  **Detection (Logic Layer):** The system calculates spread percentages. If a spread >1% is detected, a `TradeOpportunity` event is generated.
-3.  **Validation (AI Layer):**
-    *   **Sentiment Check:** The NLP engine analyzes recent headlines associated with the asset.
-    *   **Risk Scoring:** The Risk Engine calculates a volatility score.
-4.  **Execution (Transaction Layer):** If `Profit > Fees` AND `Sentiment == Positive`, the trade is marked for execution.
+1. **The Intelligence Layer (Frontend):** Runs local AI models in the browser for zero-latency sentiment analysis.
+2. **The Execution Layer (VPS):** A dedicated, static-IP Node.js engine hosted on Hetzner that handles sensitive API polling (WEEX) and arbitrage logic.
+3. **The Sync Layer (Firebase):** Acts as a real-time message bus, syncing the VPS state to the User Dashboard instantly.
 
 ---
 
-## 3. Technical Implementation
+## 2. System Architecture
 
-### A. Frontend & AI Core (React + Transformers.js)
-The frontend is not just a display; it is a computational node.
-*   **Framework:** React (Vite)
-*   **State Management:** React Context API for real-time data streams.
-*   **AI Engine:** We utilize `@xenova/transformers` to run quantized BERT models directly in the browser. This allows for zero-latency sentiment analysis of news feeds without requiring external heavy GPU servers.
-    *   *Input:* Live news headlines/Tweet streams.
-    *   *Output:* Sentiment Polarity (-1.0 to +1.0) and Confidence Score.
+```mermaid
+graph LR
+    A[Hetzner VPS (Node.js)] -->|1. Polls WEEX API (Static IP)| B(External Crypto Exchanges)
+    A -->|2. Pushes Market Data| C(Firebase Firestore)
+    D[React Dashboard] -->|3. Listens (onSnapshot)| C
+    D -->|4. Runs Local AI| E[Transformers.js]
+    E -->|5. Validates Trade| D
+```
 
-### B. The Backend Swarm (Firebase Cloud Functions)
-The backend acts as the "Market Scanner" running in a serverless environment.
-*   **Arbitrage Bot:** A scheduled function (`pubsub.schedule`) runs every 60 seconds. It fetches prices for target pairs (e.g., ETH/USDT) across two distinct liquidity sources.
-*   **Spread Calculator:** Computes the delta between sources. If the delta covers gas fees + slippage, it writes to the `opportunities` collection in Firestore.
-*   **Compliance Monitor:** A middleware function that cross-references potential trades against a "Blocked Addresses" list (simulating the Regulatory Compliance requirement).
+### Why this stack?
 
-### C. Real-Time Data Layer (Firestore)
-Firestore acts as the central message bus, synchronizing state between the serverless bots and the frontend dashboard.
-*   **Live Updates:** The frontend utilizes `onSnapshot` listeners to render price changes and arbitrage alerts instantly, eliminating the need for manual refreshing.
+* **Static IP Requirement:** WEEX requires a fixed IP for API access. Serverless functions (Lambda/GCP) rotate IPs. We use a lightweight Hetzner VPS to guarantee a static identity.
+* **Real-time Sync:** Firestore acts as the bridge. The VPS writes data, and the React frontend updates automatically without manual refreshing.
+* **Zero-Latency AI:** Transformers.js runs directly in the browser, eliminating network round-trips for sentiment analysis.
 
 ---
 
-## 4. Project Structure
+## 3. Project Structure
 
-The repository is organized into a monorepo structure separating the UI/AI logic from the serverless backend.
+The repository is split into two distinct environments:
 
 ```text
 aetheris-protocol/
-├── src/                          # Frontend & Local AI
-│   ├── components/
-│   │   ├── Dashboard/            # Main trading view
-│   │   ├── ArbitrageCard.jsx     # Visualizer for price spreads
-│   │   └── SentimentGauge.jsx    # Visualizer for AI analysis
-│   ├── hooks/
-│   │   ├── useMarketData.js      # Firestore real-time listeners
-│   │   └── useTextModel.js       # Loads the HuggingFace model
-│   ├── lib/
-│   │   ├── firebase.js           # DB initialization
-│   │   └── strategies.js         # Client-side trade logic
-│   └── App.jsx
-├── functions/                    # Serverless Backend
-│   ├── index.js                  # Entry point for Cloud Functions
-│   ├── scanners/
-│   │   ├── priceScanner.js       # Fetches exchange prices
-│   │   └── walletSecurity.js     # Mock risk assessment logic
-│   └── utils/
-│       └── math.js               # Spread & fee calculations
-├── firebase.json                 # Emulator & Deploy config
+├── client/                     # THE DASHBOARD (React + Vite)
+│   ├── src/
+│   │   ├── ai/                 # Transformers.js sentiment logic
+│   │   ├── components/         # UI Visuals
+│   │   ├── hooks/              # Firestore real-time listeners
+│   │   └── lib/firebase.js    # Client SDK config
+│   ├── package.json
+│   └── vite.config.js
+│
+├── engine/                     # THE BOT (Runs on Hetzner VPS)
+│   ├── bot.js                  # Main loop (Polling + Logic)
+│   ├── utils/                  # WEEX API, math utilities
+│   ├── service-account.json    # Secret Key (Do NOT commit this)
+│   └── package.json            # Deps: firebase-admin, axios
+│
+├── firestore.rules             # Security rules
+├── firestore.indexes.json      # Database indexes
+├── firebase.json               # Firebase config
 └── README.md
 ```
 
 ---
 
-## 5. Data Models (Schema)
+## 4. Technical Implementation
 
-The database is structured to support high-frequency reads and immutable audit trails for trades.
+### A. The Engine (VPS / Backend)
 
-### Collection: `market_ticks`
-Stores the heartbeat of the market.
+A persistent Node.js process managed by `PM2`.
+
+* **Role:** Market Maker & Data Ingestor.
+* **Permissions:** Uses `firebase-admin` service account to write to the DB with privileged access.
+* **Logic:**
+  * Polls WEEX API every 3 seconds.
+  * Calculates arbitrage spreads.
+  * Writes to `live_feed` collection (real-time prices).
+  * Creates `alerts` collection entries when arbitrage opportunities are detected.
+
+### B. The Client (React / Frontend)
+
+* **Role:** Decision Support & Visualization.
+* **Permissions:** Standard Firebase Client SDK (Read-Only on market data, can update alerts for AI validation).
+* **AI:** Uses `@xenova/transformers` to analyze news feeds locally.
+* **Real-time:** Listens to Firestore `live_feed` and `alerts` collections via `onSnapshot`.
+
+---
+
+## 5. Data Schema (Firestore)
+
+### Collection: `live_feed` (Written by VPS)
+Stores real-time market prices from WEEX.
 ```json
 {
-  "asset": "ETH",
-  "exchange_a_price": 3400.50,
-  "exchange_b_price": 3420.00,
-  "timestamp": "2025-12-01T12:00:00Z"
+  "docId": "BTC_USDT",
+  "price": 42050.00,
+  "exchange": "WEEX",
+  "last_updated": "2025-12-01T12:00:00Z"
 }
 ```
 
-### Collection: `opportunities` (The "Alerts")
-Generated by the serverless scanner when arbitrage is found.
+### Collection: `alerts` (Written by VPS, Updated by Frontend)
+Arbitrage opportunities detected by the VPS bot.
 ```json
 {
-  "status": "DETECTED", // DETECTED -> ANALYZING -> EXECUTED
-  "spread_pct": 1.25,
-  "projected_profit": 45.00,
-  "risk_level": "LOW",
+  "type": "ARBITRAGE",
+  "spread": 1.2,
+  "buy_at": "WEEX",
+  "sell_at": "BINANCE",
+  "status": "PENDING",
   "ai_validation": {
     "sentiment_score": 0.88,
     "approval": true
-  }
-}
-```
-
-### Collection: `audit_logs`
-An immutable record of automated actions (Risk & Compliance).
-```json
-{
-  "action": "TRADE_BLOCKED",
-  "reason": "Sentiment Drop Detected",
-  "ai_confidence": 0.92,
-  "timestamp": "2025-12-01T12:05:00Z"
+  },
+  "created_at": "2025-12-01T12:00:00Z"
 }
 ```
 
 ---
 
-## 6. Feature Breakdown (Idea Integration)
+## 6. Deployment Guide
 
-This prototype successfully integrates the following proposed modules from the initial conceptual list:
+### Phase 1: Database & Auth (Firebase)
 
-1.  **Arbitrage Opportunity Detector:** Implemented via Node.js Cloud Functions comparing exchange spreads.
-2.  **Sentiment Analysis Trading Bot:** Implemented via in-browser Transformers analyzing text inputs to gatekeep trades.
-3.  **Real-Time Market Sentiment Dashboard:** Visualized in the React frontend using `recharts` mapped to AI scores.
-4.  **AI-Enhanced Security / Risk Management:** Implemented as a pre-trade check that prevents execution if volatility or negative sentiment exceeds a threshold.
-5.  **Automated Regulatory Compliance:** Simulated via a "Allow/Block" list in the serverless function before trade execution.
+1. Create Firebase Project: `hackathon-project-245ba` (already done)
+2. Enable **Firestore Database**.
+3. **Generate Private Key:** 
+   - Go to Project Settings → Service Accounts
+   - Click "Generate New Private Key"
+   - Save as `engine/service-account.json` (DO NOT COMMIT)
+
+### Phase 2: The Bot (Hetzner VPS)
+
+1. SSH into VPS.
+2. Clone repo and navigate to `/engine`.
+3. Upload `service-account.json` to this folder.
+4. Install & Run:
+   ```bash
+   npm install
+   npm install -g pm2
+   pm2 start bot.js --name "aetheris-engine"
+   pm2 save
+   pm2 startup
+   ```
+
+### Phase 3: The Dashboard (Firebase Hosting / Vercel / Netlify)
+
+1. Navigate to `/client`.
+2. Create `.env.local` with your public Firebase Config (already in `.env`).
+3. Build:
+   ```bash
+   npm run build
+   ```
+4. Deploy:
+   ```bash
+   # Firebase Hosting
+   firebase deploy --only hosting
+   
+   # Or Vercel/Netlify
+   # Upload 'dist' folder or git push
+   ```
 
 ---
 
-## 7. Conclusion
-Aetheris demonstrates that complex trading strategies can be democratized using modern serverless stacks and accessible AI. By moving the heavy lifting of price scanning to the cloud and the nuance of sentiment analysis to the client, we achieve a low-latency, high-intelligence trading terminal.
+## 7. Feature Breakdown
+
+1. **Arbitrage Opportunity Detector:** Implemented via VPS bot polling WEEX API every 3 seconds.
+2. **Sentiment Analysis Trading Bot:** Implemented via in-browser Transformers.js analyzing text inputs.
+3. **Real-Time Market Sentiment Dashboard:** Visualized in the React frontend using real-time Firestore listeners.
+4. **AI-Enhanced Security / Risk Management:** Implemented as a pre-trade check that prevents execution if volatility or negative sentiment exceeds a threshold.
+5. **Hybrid Architecture:** VPS handles API calls (static IP), frontend handles AI (zero latency).
+
+---
+
+## 8. Vision (Hackathon Pitch)
+
+**Aetheris** replaces complex, expensive institutional trading infrastructures with a $5 VPS and browser-based AI. We prove that you don't need a hedge fund's budget to run a high-frequency, sentiment-aware arbitrage desk—just smart architecture.
+
+---
+
+## 9. Quick Start
+
+```bash
+# 1. Install dependencies
+cd client && npm install
+cd ../engine && npm install
+
+# 2. Configure Firebase
+# Add service-account.json to engine/ directory
+
+# 3. Start VPS bot
+cd engine
+pm2 start bot.js --name "aetheris-engine"
+
+# 4. Start frontend
+cd ../client
+npm run dev
+```
+
+---
+
+## 10. Technology Stack
+
+- **Frontend:** React + Vite + Transformers.js
+- **Backend:** Node.js (VPS) + Firebase Admin SDK
+- **Database:** Firebase Firestore
+- **Deployment:** Hetzner VPS (bot) + Firebase Hosting/Vercel (frontend)
+- **API:** WEEX Trading API
+
+---
+
+## License
+
+MIT
