@@ -9,7 +9,15 @@
 
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { fetchWeeXTicker, fetchMultipleTickers } from './utils/weexApi.js';
+import { 
+  fetchWeeXTicker, 
+  fetchMultipleTickers,
+  getOrderBook,
+  getAccountBalance,
+  getRecentTrades,
+  getOpenInterest,
+  getFundingRate
+} from './utils/weexApi.js';
 import { calculateSpread, isProfitable, calculateProjectedProfit, calculateRiskLevel } from './utils/math.js';
 import { backendAIService } from './utils/aiService.js';
 import dotenv from 'dotenv';
@@ -141,6 +149,132 @@ async function pollMarketData() {
 }
 
 /**
+ * Poll order book data (every 30 seconds)
+ */
+async function pollOrderBooks() {
+  try {
+    for (const symbol of SYMBOLS) {
+      const result = await getOrderBook(symbol, 20);
+      if (result.success && result.data) {
+        const asset = symbol.replace('cmt_', '').replace('usdt', '').toUpperCase();
+        await db.collection('order_books').doc(symbol).set({
+          symbol,
+          asset: `${asset}_USDT`,
+          bids: result.data.bids || [],
+          asks: result.data.asks || [],
+          timestamp: new Date(),
+          last_updated: new Date()
+        }, { merge: true });
+      }
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    console.error('❌ Error polling order books:', error.message);
+  }
+}
+
+/**
+ * Poll recent trades (every 30 seconds)
+ */
+async function pollRecentTrades() {
+  try {
+    for (const symbol of SYMBOLS) {
+      const result = await getRecentTrades(symbol, 20);
+      if (result.success && result.data) {
+        const asset = symbol.replace('cmt_', '').replace('usdt', '').toUpperCase();
+        await db.collection('recent_trades').doc(symbol).set({
+          symbol,
+          asset: `${asset}_USDT`,
+          trades: Array.isArray(result.data) ? result.data : (result.data.trades || []),
+          timestamp: new Date(),
+          last_updated: new Date()
+        }, { merge: true });
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    console.error('❌ Error polling recent trades:', error.message);
+  }
+}
+
+/**
+ * Poll open interest (every 60 seconds)
+ */
+async function pollOpenInterest() {
+  try {
+    for (const symbol of SYMBOLS) {
+      const result = await getOpenInterest(symbol);
+      if (result.success && result.data) {
+        const asset = symbol.replace('cmt_', '').replace('usdt', '').toUpperCase();
+        await db.collection('open_interest').doc(symbol).set({
+          symbol,
+          asset: `${asset}_USDT`,
+          openInterest: result.data.openInterest || result.data.open_interest || 0,
+          timestamp: new Date(),
+          last_updated: new Date()
+        }, { merge: true });
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    console.error('❌ Error polling open interest:', error.message);
+  }
+}
+
+/**
+ * Poll funding rates (every 60 seconds)
+ */
+async function pollFundingRates() {
+  try {
+    for (const symbol of SYMBOLS) {
+      const result = await getFundingRate(symbol);
+      if (result.success && result.data) {
+        const asset = symbol.replace('cmt_', '').replace('usdt', '').toUpperCase();
+        await db.collection('funding_rates').doc(symbol).set({
+          symbol,
+          asset: `${asset}_USDT`,
+          fundingRate: result.data.fundingRate || result.data.funding_rate || 0,
+          nextFundingTime: result.data.nextFundingTime || result.data.next_funding_time || null,
+          timestamp: new Date(),
+          last_updated: new Date()
+        }, { merge: true });
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    console.error('❌ Error polling funding rates:', error.message);
+  }
+}
+
+/**
+ * Poll account balance (every 60 seconds, if credentials available)
+ */
+async function pollAccountBalance() {
+  try {
+    const accountId = process.env.WEEX_ACCOUNT_ID || 'default';
+    const result = await getAccountBalance(accountId);
+    if (result.success && result.data) {
+      await db.collection('account_balance').doc('main').set({
+        accountId,
+        available: result.data.available || 0,
+        margin: result.data.margin || 0,
+        total: result.data.total || (result.data.available || 0) + (result.data.margin || 0),
+        assets: result.data.assets || [],
+        timestamp: new Date(),
+        last_updated: new Date()
+      }, { merge: true });
+      console.log(`💰 Account balance updated: $${((result.data.available || 0) + (result.data.margin || 0)).toFixed(2)}`);
+    }
+  } catch (error) {
+    // Silently fail if credentials not configured
+    if (!error.message.includes('credentials not configured')) {
+      console.error('❌ Error polling account balance:', error.message);
+    }
+  }
+}
+
+/**
  * Process pending alerts with AI analysis
  */
 async function processPendingAlerts() {
@@ -255,6 +389,40 @@ async function startBot() {
   setInterval(async () => {
     await processPendingAlerts();
   }, 10000);
+
+  // Set up interval for order books (every 30 seconds)
+  setInterval(async () => {
+    await pollOrderBooks();
+  }, 30000);
+
+  // Set up interval for recent trades (every 30 seconds)
+  setInterval(async () => {
+    await pollRecentTrades();
+  }, 30000);
+
+  // Set up interval for open interest (every 60 seconds)
+  setInterval(async () => {
+    await pollOpenInterest();
+  }, 60000);
+
+  // Set up interval for funding rates (every 60 seconds)
+  setInterval(async () => {
+    await pollFundingRates();
+  }, 60000);
+
+  // Set up interval for account balance (every 60 seconds)
+  setInterval(async () => {
+    await pollAccountBalance();
+  }, 60000);
+
+  // Initial polls
+  setTimeout(async () => {
+    await pollOrderBooks();
+    await pollRecentTrades();
+    await pollOpenInterest();
+    await pollFundingRates();
+    await pollAccountBalance();
+  }, 5000); // Wait 5 seconds after start
 
   console.log('✅ Bot is running. Press Ctrl+C to stop.\n');
 }

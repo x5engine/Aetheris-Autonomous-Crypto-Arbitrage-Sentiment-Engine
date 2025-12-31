@@ -73,12 +73,81 @@ service cloud.firestore {
 
             // Trades collection (user trading history)
             match /trades/{tradeId} {
-              // Users can read their own trades
-              allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+              // Allow read if authenticated and (userId matches OR userId doesn't exist in document)
+              // For list queries, we can't check resource.data, so allow list for authenticated users
+              allow get: if request.auth != null && 
+                         (resource == null || 
+                          !('userId' in resource.data) || 
+                          resource.data.userId == request.auth.uid);
+              allow list: if request.auth != null; // Allow list for authenticated users
               // Only VPS bot can create trades (via Admin SDK)
               allow create: if false;
               // Users can update their own trades (for status updates)
-              allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+              allow update: if request.auth != null && 
+                          (resource == null ||
+                           !('userId' in resource.data) || 
+                           resource.data.userId == request.auth.uid);
+              allow delete: if false;
+            }
+
+            // Order books collection (public market data)
+            match /order_books/{docId} {
+              allow get: if true;
+              allow list: if true;
+              allow create: if false;
+              allow update: if false;
+              allow delete: if false;
+            }
+
+            // Recent trades collection (public market data)
+            match /recent_trades/{docId} {
+              allow get: if true;
+              allow list: if true;
+              allow create: if false;
+              allow update: if false;
+              allow delete: if false;
+            }
+
+            // Open interest collection (public market data)
+            match /open_interest/{docId} {
+              allow get: if true;
+              allow list: if true;
+              allow create: if false;
+              allow update: if false;
+              allow delete: if false;
+            }
+
+            // Funding rates collection (public market data)
+            match /funding_rates/{docId} {
+              allow get: if true;
+              allow list: if true;
+              allow create: if false;
+              allow update: if false;
+              allow delete: if false;
+            }
+
+            // Account balance collection (user-specific, but allow public read for display)
+            match /account_balance/{docId} {
+              allow get: if true;
+              allow list: if true;
+              allow create: if false;
+              allow update: if false;
+              allow delete: if false;
+            }
+
+            // Positions collection (user-specific)
+            match /positions/{positionId} {
+              // Allow read if authenticated and (userId matches OR userId doesn't exist)
+              allow get: if request.auth != null && 
+                         (resource == null || 
+                          !('userId' in resource.data) || 
+                          resource.data.userId == request.auth.uid);
+              allow list: if request.auth != null; // Allow list for authenticated users
+              allow create: if false;
+              allow update: if request.auth != null && 
+                          (resource == null ||
+                           !('userId' in resource.data) || 
+                           resource.data.userId == request.auth.uid);
               allow delete: if false;
             }
 

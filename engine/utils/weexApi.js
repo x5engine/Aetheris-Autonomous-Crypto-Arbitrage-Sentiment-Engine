@@ -115,3 +115,213 @@ export async function fetchMultipleTickers(symbols) {
   return results;
 }
 
+/**
+ * Get order book depth (public endpoint)
+ */
+export async function getOrderBook(symbol, limit = 20) {
+  try {
+    const requestPath = `/capi/v2/market/depth?symbol=${symbol}&limit=${limit}`;
+    const response = await axios.get(`${WEEX_API_DOMAIN}${requestPath}`, {
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'locale': 'en-US'
+      }
+    });
+    
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error(`Error fetching order book for ${symbol}:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get account balance (private endpoint)
+ */
+export async function getAccountBalance(accountId) {
+  try {
+    const apiKey = process.env.WEEX_API_KEY;
+    const secretKey = process.env.WEEX_SECRET_KEY;
+    const passphrase = process.env.WEEX_PASSPHRASE;
+    
+    if (!apiKey || !secretKey || !passphrase) {
+      throw new Error('WEEX API credentials not configured');
+    }
+    
+    const requestPath = `/capi/v2/account/assets?accountId=${accountId}`;
+    const headers = getWeeXHeaders(apiKey, secretKey, passphrase, 'GET', requestPath);
+    const response = await axios.get(`${WEEX_API_DOMAIN}${requestPath}`, {
+      headers,
+      timeout: 10000
+    });
+    
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error(`Error fetching account balance:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get recent trades (public endpoint)
+ */
+export async function getRecentTrades(symbol, limit = 20) {
+  try {
+    const requestPath = `/capi/v2/market/trades?symbol=${symbol}&limit=${limit}`;
+    const response = await axios.get(`${WEEX_API_DOMAIN}${requestPath}`, {
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'locale': 'en-US'
+      }
+    });
+    
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error(`Error fetching recent trades for ${symbol}:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get open interest (public endpoint)
+ */
+export async function getOpenInterest(symbol) {
+  try {
+    const requestPath = `/capi/v2/market/openInterest?symbol=${symbol}`;
+    const response = await axios.get(`${WEEX_API_DOMAIN}${requestPath}`, {
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'locale': 'en-US'
+      }
+    });
+    
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error(`Error fetching open interest for ${symbol}:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get candlestick data (public endpoint)
+ */
+export async function getCandles(symbol, interval = '1h', limit = 100) {
+  try {
+    const requestPath = `/capi/v2/market/candles?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const response = await axios.get(`${WEEX_API_DOMAIN}${requestPath}`, {
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'locale': 'en-US'
+      }
+    });
+    
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error(`Error fetching candles for ${symbol}:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get current funding rate (public endpoint)
+ */
+export async function getFundingRate(symbol) {
+  try {
+    const requestPath = `/capi/v2/market/fundingRate/current?symbol=${symbol}`;
+    const response = await axios.get(`${WEEX_API_DOMAIN}${requestPath}`, {
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+        'locale': 'en-US'
+      }
+    });
+    
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error(`Error fetching funding rate for ${symbol}:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
