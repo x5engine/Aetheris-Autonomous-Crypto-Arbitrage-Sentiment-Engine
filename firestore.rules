@@ -71,6 +71,15 @@ service cloud.firestore {
               allow read, write: if request.auth != null && request.auth.uid == userId;
             }
 
+            // User preferences collection (auto-execute settings)
+            match /user_preferences/{userId} {
+              // Users can read/write their own preferences
+              allow read, write: if request.auth != null && request.auth.uid == userId;
+              // Bot can read all preferences (for auto-execute logic) - public read
+              allow get: if true;
+              allow list: if true;
+            }
+
             // Trades collection (user trading history)
             match /trades/{tradeId} {
               // Allow read if authenticated and (userId matches OR userId doesn't exist in document)

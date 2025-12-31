@@ -9,14 +9,16 @@
 
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { 
-  fetchWeeXTicker, 
+import {
+  fetchWeeXTicker,
   fetchMultipleTickers,
   getOrderBook,
   getAccountBalance,
   getRecentTrades,
   getOpenInterest,
-  getFundingRate
+  getFundingRate,
+  placeTriggerOrder,
+  placeMarketOrder
 } from './utils/weexApi.js';
 import { calculateSpread, isProfitable, calculateProjectedProfit, calculateRiskLevel } from './utils/math.js';
 import { backendAIService } from './utils/aiService.js';
@@ -121,6 +123,7 @@ async function pollMarketData() {
           symbol: symbol,
           asset: asset,
           volume_24h: 0, // Will be updated when trades execute
+          auto_execute: true, // Enable auto-execution for approved trades
           created_at: new Date(),
           timestamp: new Date().toISOString()
         });
@@ -352,6 +355,150 @@ async function processPendingAlerts() {
 }
 
 /**
+ * Auto-execute APPROVED trades using trigger orders
+ * This implements smart contract-like behavior: trades execute automatically when conditions are met
+ * Respects user preferences for auto-execute and max risk level
+ */
+async function autoExecuteApprovedTrades() {
+  try {
+    // Get all users with auto-execute enabled
+    const userPrefsSnapshot = await db.collection('user_preferences')
+      .where('auto_execute_enabled', '==', true)
+      .get();
+
+    if (userPrefsSnapshot.empty) {
+      // No users have auto-execute enabled
+      return;
+    }
+
+    // Get the most permissive risk level (lowest restriction)
+    const riskLevels = ['LOW', 'MEDIUM', 'HIGH'];
+    let maxAllowedRisk = 'LOW';
+    userPrefsSnapshot.forEach(doc => {
+      const prefs = doc.data();
+      const userRisk = prefs.auto_execute_max_risk || 'MEDIUM';
+      const userRiskIndex = riskLevels.indexOf(userRisk);
+      const currentRiskIndex = riskLevels.indexOf(maxAllowedRisk);
+      if (userRiskIndex > currentRiskIndex) {
+        maxAllowedRisk = userRisk;
+      }
+    });
+
+    console.log(`⚡ [AUTO-EXECUTE] Users have auto-execute enabled. Max risk level: ${maxAllowedRisk}`);
+
+    // Get APPROVED alerts that match risk criteria
+    const approvedAlerts = await db.collection('alerts')
+      .where('status', '==', 'APPROVED')
+      .where('auto_execute', '==', true)
+      .limit(5)
+      .get();
+
+    if (approvedAlerts.empty) {
+      return;
+    }
+
+    // Filter by risk level
+    const riskLevelOrder = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+    const maxRiskIndex = riskLevelOrder[maxAllowedRisk];
+    const eligibleAlerts = approvedAlerts.docs.filter(doc => {
+      const alert = doc.data();
+      const alertRiskIndex = riskLevelOrder[alert.risk_level] || 2;
+      return alertRiskIndex <= maxRiskIndex;
+    });
+
+    if (eligibleAlerts.length === 0) {
+      return;
+    }
+
+    console.log(`⚡ [AUTO-EXECUTE] Processing ${eligibleAlerts.length} eligible alerts (risk <= ${maxAllowedRisk})...`);
+
+    const accountId = process.env.WEEX_ACCOUNT_ID || 'default';
+
+    for (const alertDoc of eligibleAlerts) {
+      const alert = { id: alertDoc.id, ...alertDoc.data() };
+      
+      try {
+        // Check if conditions are still met
+        const currentPrice = await fetchWeeXTicker(alert.symbol);
+        if (!currentPrice.success || !currentPrice.price) {
+          console.warn(`⚠️  [AUTO-EXECUTE] Could not fetch current price for ${alert.symbol}`);
+          continue;
+        }
+
+        // Update status to EXECUTING
+        await db.collection('alerts').doc(alert.id).update({
+          status: 'EXECUTING',
+          execution_started_at: new Date()
+        });
+
+        console.log(`⚡ [AUTO-EXECUTE] Executing trade for ${alert.asset || alert.symbol}...`);
+
+        // Determine order side based on arbitrage direction
+        const side = alert.buy_at === 'WEEX' ? 'buy' : 'sell';
+        const tradeSize = alert.requested_trade_size || 10; // Default 10 USDT
+
+        // Use trigger order for automated execution when price conditions are met
+        // Trigger price is the current WEEX price (where we want to buy/sell)
+        const triggerResult = await placeTriggerOrder({
+          symbol: alert.symbol,
+          side: side,
+          orderType: 'market', // Market order executes immediately when triggered
+          size: tradeSize,
+          triggerPrice: alert.weex_price, // Execute when price reaches this level
+          accountId: accountId
+        });
+
+        if (triggerResult.success) {
+          // Update alert with order details
+          await db.collection('alerts').doc(alert.id).update({
+            status: 'EXECUTED',
+            order_id: triggerResult.orderId,
+            executed_at: new Date(),
+            execution_method: 'AUTO_TRIGGER_ORDER',
+            trigger_order_id: triggerResult.orderId
+          });
+
+          console.log(`✅ [AUTO-EXECUTE] Trade executed for ${alert.asset || alert.symbol}`);
+          console.log(`   Order ID: ${triggerResult.orderId}`);
+          console.log(`   Method: Trigger Order (automated)`);
+        } else {
+          // Fallback to immediate market order if trigger order fails
+          console.warn(`⚠️  [AUTO-EXECUTE] Trigger order failed, trying market order...`);
+          const marketResult = await placeMarketOrder({
+            symbol: alert.symbol,
+            side: side,
+            size: tradeSize,
+            accountId: accountId
+          });
+
+          if (marketResult.success) {
+            await db.collection('alerts').doc(alert.id).update({
+              status: 'EXECUTED',
+              order_id: marketResult.orderId,
+              executed_at: new Date(),
+              execution_method: 'AUTO_MARKET_ORDER'
+            });
+            console.log(`✅ [AUTO-EXECUTE] Trade executed via market order`);
+          } else {
+            throw new Error(marketResult.error || 'Market order failed');
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [AUTO-EXECUTE] Error executing trade for alert ${alert.id}:`, error.message);
+        // Mark as failed but keep APPROVED status for retry
+        await db.collection('alerts').doc(alert.id).update({
+          status: 'APPROVED',
+          execution_error: error.message,
+          execution_attempts: (alert.execution_attempts || 0) + 1
+        });
+      }
+    }
+  } catch (error) {
+    console.error('❌ [AUTO-EXECUTE] Error processing approved trades:', error);
+  }
+}
+
+/**
  * Start the bot
  */
 async function startBot() {
@@ -414,6 +561,12 @@ async function startBot() {
   setInterval(async () => {
     await pollAccountBalance();
   }, 60000);
+
+  // Set up interval for auto-execution (every 15 seconds)
+  // This checks for APPROVED alerts and executes them automatically using trigger orders
+  setInterval(async () => {
+    await autoExecuteApprovedTrades();
+  }, 15000);
 
   // Initial polls
   setTimeout(async () => {

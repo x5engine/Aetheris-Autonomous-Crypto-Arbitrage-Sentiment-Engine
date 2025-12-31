@@ -325,3 +325,123 @@ export async function getFundingRate(symbol) {
   }
 }
 
+/**
+ * Place a trigger order (conditional order that executes when price conditions are met)
+ * This enables automated trade execution based on market conditions
+ * @param {object} params - Order parameters
+ * @param {string} params.symbol - Trading symbol (e.g., 'cmt_btcusdt')
+ * @param {string} params.side - 'buy' or 'sell'
+ * @param {string} params.orderType - 'limit' or 'market'
+ * @param {number} params.size - Order size
+ * @param {number} params.triggerPrice - Price that triggers the order
+ * @param {number} params.price - Limit price (if orderType is 'limit')
+ * @param {string} params.accountId - Account ID
+ * @returns {Promise<object>} Order result
+ */
+export async function placeTriggerOrder(params) {
+  try {
+    const apiKey = process.env.WEEX_API_KEY;
+    const secretKey = process.env.WEEX_SECRET_KEY;
+    const passphrase = process.env.WEEX_PASSPHRASE;
+
+    if (!apiKey || !secretKey || !passphrase) {
+      throw new Error('WEEX API credentials not configured');
+    }
+
+    const requestPath = '/capi/v2/trade/trigger/order';
+    const body = {
+      symbol: params.symbol,
+      side: params.side, // 'buy' or 'sell'
+      orderType: params.orderType || 'market', // 'limit' or 'market'
+      size: params.size,
+      triggerPrice: params.triggerPrice,
+      accountId: params.accountId
+    };
+
+    // Add price if limit order
+    if (params.orderType === 'limit' && params.price) {
+      body.price = params.price;
+    }
+
+    const headers = getWeeXHeaders(apiKey, secretKey, passphrase, 'POST', requestPath, body);
+    const response = await axios.post(`${WEEX_API_DOMAIN}${requestPath}`, body, {
+      headers,
+      timeout: 10000
+    });
+
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data,
+        orderId: response.data.orderId || response.data.id
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error('Error placing trigger order:', error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Place a regular market order (for immediate execution)
+ * @param {object} params - Order parameters
+ * @param {string} params.symbol - Trading symbol
+ * @param {string} params.side - 'buy' or 'sell'
+ * @param {number} params.size - Order size
+ * @param {string} params.accountId - Account ID
+ * @returns {Promise<object>} Order result
+ */
+export async function placeMarketOrder(params) {
+  try {
+    const apiKey = process.env.WEEX_API_KEY;
+    const secretKey = process.env.WEEX_SECRET_KEY;
+    const passphrase = process.env.WEEX_PASSPHRASE;
+
+    if (!apiKey || !secretKey || !passphrase) {
+      throw new Error('WEEX API credentials not configured');
+    }
+
+    const requestPath = '/capi/v2/trade/order';
+    const body = {
+      symbol: params.symbol,
+      side: params.side,
+      orderType: 'market',
+      size: params.size,
+      accountId: params.accountId
+    };
+
+    const headers = getWeeXHeaders(apiKey, secretKey, passphrase, 'POST', requestPath, body);
+    const response = await axios.post(`${WEEX_API_DOMAIN}${requestPath}`, body, {
+      headers,
+      timeout: 10000
+    });
+
+    if (response.status === 200 && response.data) {
+      return {
+        success: true,
+        data: response.data,
+        orderId: response.data.orderId || response.data.id
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Unexpected response format'
+    };
+  } catch (error) {
+    console.error('Error placing market order:', error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
