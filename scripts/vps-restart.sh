@@ -39,8 +39,8 @@ eval "$SSH_CMD $VPS_USER@$VPS_IP" << 'ENDSSH'
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     nvm use 20
-    pm2 restart aetheris-engine
-    echo "✅ Bot restarted"
+    pm2 restart aetheris-engine --update-env
+    echo "✅ Bot restarted with updated environment variables"
 ENDSSH
 
 echo -e "${GREEN}✅ Bot restarted${NC}"

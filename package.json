@@ -24,9 +24,15 @@
     "vps:logs": "./scripts/vps-logs.sh",
     "vps:status": "./scripts/vps-status.sh",
     "vps:upload-secrets": "./scripts/vps-upload-secrets.sh",
+    "vps:check-ai": "./scripts/vps-check-ai.sh",
     "vps:quick-setup": "./QUICK_SETUP.sh",
     "test:bot": "./scripts/test-bot.sh",
-    "test:firestore": "node scripts/test-firestore.js"
+    "test:firestore": "node scripts/test-firestore.js",
+    "test:weex-api": "./scripts/test-weex-api-vps.sh",
+    "emulators:start": "firebase emulators:start",
+    "emulators:exec": "firebase emulators:exec",
+    "bot:local": "cd engine && npm run local",
+    "bot:local:watch": "cd engine && npm run local:watch"
   },
   "private": true
 }

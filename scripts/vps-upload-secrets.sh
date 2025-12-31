@@ -95,15 +95,19 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     read -sp "WEEX_PASSPHRASE: " WEEX_PASSPHRASE
     echo
     
+    read -p "EMBEDAPI_KEY (for AI analysis): " EMBEDAPI_KEY
+    echo
+    
     eval "$SSH_CMD $VPS_USER@$VPS_IP" << ENDSSH
         cat > ~/aetheris-engine/.env << EOF
 WEEX_API_KEY=$WEEX_API_KEY
 WEEX_SECRET_KEY=$WEEX_SECRET_KEY
 WEEX_PASSPHRASE=$WEEX_PASSPHRASE
 WEEX_API_DOMAIN=https://api-contract.weex.com
+EMBEDAPI_KEY=$EMBEDAPI_KEY
 EOF
         chmod 600 ~/aetheris-engine/.env
-        echo "✅ .env file created on VPS"
+        echo "✅ .env file created on VPS with WEEX and EmbedAPI keys"
 ENDSSH
 else
     echo -e "${YELLOW}⚠️  Skipping .env creation${NC}"

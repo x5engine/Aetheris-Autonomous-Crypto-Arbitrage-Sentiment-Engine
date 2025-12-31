@@ -38,49 +38,30 @@ export async function fetchWeeXTicker(symbol) {
       });
     }
 
-    // Enhanced error logging
-    if (response.status !== 200) {
-      console.error(`WEEX API HTTP ${response.status} for ${symbol}:`, response.data);
-    }
-
-    // Check multiple response code formats
-    if (response.data) {
-      const code = response.data.code;
-      const isSuccess = code === 0 || code === '0' || code === '00000' || code === 200;
+    // WEEX API returns data directly (not wrapped in {code, msg, data})
+    // Response format: { symbol, last, best_ask, best_bid, ... }
+    if (response.status === 200 && response.data) {
+      // Extract price from 'last' field
+      const price = parseFloat(response.data.last || response.data.best_ask || response.data.best_bid || 0);
       
-      if (isSuccess) {
-        // Try different price field names
-        const price = parseFloat(
-          response.data.data?.lastPrice || 
-          response.data.data?.price || 
-          response.data.data?.last || 
-          response.data.lastPrice ||
-          response.data.price ||
-          0
-        );
-        
-        if (price > 0) {
-          return {
-            success: true,
-            data: response.data.data || response.data,
-            price: price
-          };
-        } else {
-          console.error(`WEEX API returned success but no valid price for ${symbol}:`, JSON.stringify(response.data, null, 2));
-        }
+      if (price > 0) {
+        return {
+          success: true,
+          data: response.data,
+          price: price
+        };
+      } else {
+        console.error(`WEEX API returned success but no valid price for ${symbol}:`, JSON.stringify(response.data, null, 2));
+        throw new Error(`WEEX API error: No valid price in response`);
       }
-      
-      // Log actual response for debugging
-      console.error(`WEEX API response for ${symbol}:`, {
-        code: response.data.code,
-        msg: response.data.msg || response.data.message,
-        data: response.data.data ? 'present' : 'missing'
-      });
-      
-      throw new Error(`WEEX API error: ${response.data.msg || response.data.message || `Code: ${response.data.code}` || 'Unknown error'}`);
     }
 
-    throw new Error(`WEEX API error: Empty response`);
+    // If we get here, something is wrong
+    console.error(`WEEX API unexpected response for ${symbol}:`, {
+      status: response.status,
+      data: response.data
+    });
+    throw new Error(`WEEX API error: Unexpected response format`);
   } catch (error) {
     // Enhanced error logging
     if (error.response) {

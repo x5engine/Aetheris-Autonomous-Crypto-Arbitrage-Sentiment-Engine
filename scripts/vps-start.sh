@@ -68,7 +68,7 @@ if [ ! -z "$EXISTING_PROCESS" ]; then
             npm install -g pm2
         fi
         
-        pm2 restart aetheris-engine || pm2 start bot.js --name "aetheris-engine"
+        pm2 restart aetheris-engine --update-env || pm2 start bot.js --name "aetheris-engine" --update-env
         pm2 save
         echo "✅ Bot restarted"
 ENDSSH
