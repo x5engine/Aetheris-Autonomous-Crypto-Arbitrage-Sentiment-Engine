@@ -8,7 +8,8 @@
     "start": "node bot.js",
     "dev": "node --watch bot.js",
     "local": "USE_EMULATOR=true FIREBASE_PROJECT_ID=hackathon-project-245ba node bot-local.js",
-    "local:watch": "USE_EMULATOR=true FIREBASE_PROJECT_ID=hackathon-project-245ba node --watch bot-local.js"
+    "local:watch": "USE_EMULATOR=true FIREBASE_PROJECT_ID=hackathon-project-245ba node --watch bot-local.js",
+    "test:api-order": "node test-api-order.js"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",

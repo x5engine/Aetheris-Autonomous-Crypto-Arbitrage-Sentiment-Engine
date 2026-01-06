@@ -27,11 +27,12 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Load environment variables
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Load environment variables from both engine and root directories
+dotenv.config({ path: join(__dirname, '.env') });
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 // Initialize Firebase Admin with service account
 let db;
@@ -334,6 +335,112 @@ async function processPendingAlerts() {
         console.log(`   💡 Recommendation: ${analysis.recommendation}`);
         console.log(`   📝 Reasoning: ${analysis.reasoning.substring(0, 100)}...`);
         console.log(`   ✅ Status: ${approval ? 'APPROVED' : 'REJECTED'}`);
+
+        // If AI approves, immediately execute the trade
+        if (approval) {
+          // Check if any user has auto-execute enabled
+          const userPrefsSnapshot = await db.collection('user_preferences')
+            .where('auto_execute_enabled', '==', true)
+            .limit(1)
+            .get();
+
+          if (!userPrefsSnapshot.empty) {
+            // Get the most permissive risk level
+            const riskLevels = ['LOW', 'MEDIUM', 'HIGH'];
+            let maxAllowedRisk = 'LOW';
+            userPrefsSnapshot.forEach(doc => {
+              const prefs = doc.data();
+              const userRisk = prefs.auto_execute_max_risk || 'MEDIUM';
+              const userRiskIndex = riskLevels.indexOf(userRisk);
+              const currentRiskIndex = riskLevels.indexOf(maxAllowedRisk);
+              if (userRiskIndex > currentRiskIndex) {
+                maxAllowedRisk = userRisk;
+              }
+            });
+
+            // Check if alert's risk level is within permitted range
+            const riskLevelOrder = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+            const alertRiskIndex = riskLevelOrder[alert.risk_level] || 2;
+            const maxRiskIndex = riskLevelOrder[maxAllowedRisk];
+
+            if (alertRiskIndex <= maxRiskIndex) {
+              console.log(`🚀 [AI-EXECUTE] AI approved trade! Executing immediately...`);
+              
+              try {
+                // Get current price to calculate order size
+                const currentPriceResult = await fetchWeeXTicker(alert.symbol);
+                if (!currentPriceResult.success || !currentPriceResult.price) {
+                  console.warn(`⚠️  [AI-EXECUTE] Could not fetch price for ${alert.symbol}, skipping execution`);
+                  continue;
+                }
+
+                const currentPrice = currentPriceResult.price;
+                const tradeValue = alert.requested_trade_size || 10; // Default 10 USDT
+                const orderSize = tradeValue / currentPrice;
+                
+                // Round to 6 decimal places
+                const roundedSize = Math.round(orderSize * 1000000) / 1000000;
+
+                if (roundedSize < 0.000001) {
+                  console.warn(`⚠️  [AI-EXECUTE] Order size too small (${roundedSize}), skipping`);
+                  continue;
+                }
+
+                // Determine order side based on arbitrage direction
+                const side = alert.buy_at === 'WEEX' ? 'buy' : 'sell';
+                const accountId = process.env.WEEX_ACCOUNT_ID || process.env.ACCOUNT_ID || 'default';
+
+                console.log(`📊 [AI-EXECUTE] Placing market order:`);
+                console.log(`   Symbol: ${alert.symbol}`);
+                console.log(`   Side: ${side}`);
+                console.log(`   Size: ${roundedSize} contracts (~$${tradeValue} USDT)`);
+                console.log(`   Price: $${currentPrice.toFixed(2)}`);
+
+                // Place market order immediately
+                const orderResult = await placeMarketOrder({
+                  symbol: alert.symbol,
+                  side: side,
+                  size: roundedSize,
+                  accountId: accountId
+                });
+
+                if (orderResult.success) {
+                  // Update alert to EXECUTED
+                  await db.collection('alerts').doc(alert.id).update({
+                    status: 'EXECUTED',
+                    order_id: orderResult.orderId,
+                    executed_at: new Date(),
+                    execution_method: 'AI_AUTO_MARKET_ORDER',
+                    execution_price: currentPrice,
+                    execution_size: roundedSize
+                  });
+
+                  console.log(`✅ [AI-EXECUTE] Trade executed successfully!`);
+                  console.log(`   Order ID: ${orderResult.orderId}`);
+                  console.log(`   Method: AI Auto-Execute (Market Order)`);
+                } else {
+                  console.error(`❌ [AI-EXECUTE] Order placement failed: ${orderResult.error}`);
+                  // Keep as APPROVED for retry by auto-execute function
+                  await db.collection('alerts').doc(alert.id).update({
+                    execution_error: orderResult.error,
+                    execution_attempts: 1
+                  });
+                }
+              } catch (error) {
+                console.error(`❌ [AI-EXECUTE] Error executing trade: ${error.message}`);
+                // Keep as APPROVED for retry
+                await db.collection('alerts').doc(alert.id).update({
+                  execution_error: error.message,
+                  execution_attempts: 1
+                });
+              }
+            } else {
+              console.log(`⚠️  [AI-EXECUTE] Alert risk (${alert.risk_level}) exceeds max permitted risk (${maxAllowedRisk}). Keeping as APPROVED.`);
+            }
+          } else {
+            console.log(`ℹ️  [AI-EXECUTE] No users have auto-execute enabled. Keeping alert as APPROVED.`);
+          }
+        }
       } catch (error) {
         console.error(`❌ [AI] Error analyzing alert ${alert.id}:`, error.message);
         // Mark as rejected on error

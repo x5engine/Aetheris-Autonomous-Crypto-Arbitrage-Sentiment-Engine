@@ -23,9 +23,9 @@ export async function fetchWeeXTicker(symbol) {
       });
     } catch (publicError) {
       // If public fails, try with authentication
-      const apiKey = process.env.WEEX_API_KEY;
-      const secretKey = process.env.WEEX_SECRET_KEY;
-      const passphrase = process.env.WEEX_PASSPHRASE;
+      const apiKey = process.env.WEEX_API_KEY || process.env.APIKey;
+      const secretKey = process.env.WEEX_SECRET_KEY || process.env.SecretKey;
+      const passphrase = process.env.WEEX_PASSPHRASE || process.env.Passphrase;
 
       if (!apiKey || !secretKey || !passphrase) {
         throw new Error('WEEX API credentials not configured and public endpoint failed');
@@ -154,9 +154,9 @@ export async function getOrderBook(symbol, limit = 20) {
  */
 export async function getAccountBalance(accountId) {
   try {
-    const apiKey = process.env.WEEX_API_KEY;
-    const secretKey = process.env.WEEX_SECRET_KEY;
-    const passphrase = process.env.WEEX_PASSPHRASE;
+    const apiKey = process.env.WEEX_API_KEY || process.env.APIKey;
+    const secretKey = process.env.WEEX_SECRET_KEY || process.env.SecretKey;
+    const passphrase = process.env.WEEX_PASSPHRASE || process.env.Passphrase;
     
     if (!apiKey || !secretKey || !passphrase) {
       throw new Error('WEEX API credentials not configured');
@@ -340,9 +340,9 @@ export async function getFundingRate(symbol) {
  */
 export async function placeTriggerOrder(params) {
   try {
-    const apiKey = process.env.WEEX_API_KEY;
-    const secretKey = process.env.WEEX_SECRET_KEY;
-    const passphrase = process.env.WEEX_PASSPHRASE;
+    const apiKey = process.env.WEEX_API_KEY || process.env.APIKey;
+    const secretKey = process.env.WEEX_SECRET_KEY || process.env.SecretKey;
+    const passphrase = process.env.WEEX_PASSPHRASE || process.env.Passphrase;
 
     if (!apiKey || !secretKey || !passphrase) {
       throw new Error('WEEX API credentials not configured');
@@ -383,6 +383,21 @@ export async function placeTriggerOrder(params) {
     };
   } catch (error) {
     console.error('Error placing trigger order:', error.message);
+    
+    // Enhanced error details
+    if (error.response) {
+      const errorMsg = error.response.data?.msg || 
+                       error.response.data?.message || 
+                       error.response.data?.error ||
+                       JSON.stringify(error.response.data) ||
+                       error.response.statusText;
+      return {
+        success: false,
+        error: `HTTP ${error.response.status}: ${errorMsg}`,
+        details: error.response.data
+      };
+    }
+    
     return {
       success: false,
       error: error.message
@@ -401,9 +416,9 @@ export async function placeTriggerOrder(params) {
  */
 export async function placeMarketOrder(params) {
   try {
-    const apiKey = process.env.WEEX_API_KEY;
-    const secretKey = process.env.WEEX_SECRET_KEY;
-    const passphrase = process.env.WEEX_PASSPHRASE;
+    const apiKey = process.env.WEEX_API_KEY || process.env.APIKey;
+    const secretKey = process.env.WEEX_SECRET_KEY || process.env.SecretKey;
+    const passphrase = process.env.WEEX_PASSPHRASE || process.env.Passphrase;
 
     if (!apiKey || !secretKey || !passphrase) {
       throw new Error('WEEX API credentials not configured');
@@ -438,6 +453,21 @@ export async function placeMarketOrder(params) {
     };
   } catch (error) {
     console.error('Error placing market order:', error.message);
+    
+    // Enhanced error details
+    if (error.response) {
+      const errorMsg = error.response.data?.msg || 
+                       error.response.data?.message || 
+                       error.response.data?.error ||
+                       JSON.stringify(error.response.data) ||
+                       error.response.statusText;
+      return {
+        success: false,
+        error: `HTTP ${error.response.status}: ${errorMsg}`,
+        details: error.response.data
+      };
+    }
+    
     return {
       success: false,
       error: error.message
